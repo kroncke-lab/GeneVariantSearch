@@ -17,6 +17,7 @@ except ImportError:
 
 try:
     from google import genai
+    from google.genai import types
     HAS_GEMINI = True
 except ImportError:
     HAS_GEMINI = False
@@ -114,7 +115,10 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
             else:
                 response = self.client.models.generate_content(
                     model=self.model,
-                    contents=prompt
+                    contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json"
+                    )
                 )
                 response_text = response.text
             

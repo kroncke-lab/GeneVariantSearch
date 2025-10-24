@@ -115,7 +115,16 @@ if search_button:
                 if not articles:
                     st.warning("No articles found. Try different search terms.")
                 else:
-                    st.success(f"Found {len(articles)} articles. Analyzing with AI...")
+                    full_text_count = sum(1 for a in articles if a.get('content_type') == 'full_text_with_supplements')
+                    abstract_count = len(articles) - full_text_count
+                    
+                    content_summary = []
+                    if full_text_count > 0:
+                        content_summary.append(f"{full_text_count} with full text & supplements")
+                    if abstract_count > 0:
+                        content_summary.append(f"{abstract_count} abstract-only")
+                    
+                    st.success(f"Found {len(articles)} articles ({', '.join(content_summary)}). Analyzing with AI...")
                     
                     progress_bar = st.progress(0)
                     status_text = st.empty()
@@ -124,7 +133,8 @@ if search_button:
                     
                     results = []
                     for idx, article in enumerate(articles):
-                        status_text.text(f"Analyzing article {idx + 1} of {len(articles)}...")
+                        content_label = "full text" if article.get('content_type') == 'full_text_with_supplements' else "abstract"
+                        status_text.text(f"Analyzing article {idx + 1} of {len(articles)} ({content_label})...")
                         progress_bar.progress((idx + 1) / len(articles))
                         
                         analysis = analyzer.extract_variant_data(
@@ -140,7 +150,9 @@ if search_button:
                             "authors": article['authors'],
                             "has_variant_data": analysis.get('has_variant_data', False),
                             "variants": analysis.get('variants', []),
-                            "confidence": analysis.get('confidence', 'low')
+                            "confidence": analysis.get('confidence', 'low'),
+                            "content_type": article.get('content_type', 'abstract'),
+                            "pmc_id": article.get('pmc_id')
                         }
                         
                         results.append(result)
@@ -217,8 +229,11 @@ if st.session_state.results:
     
     with st.expander("📄 View All Article Details"):
         for result in results:
-            st.markdown(f"**PMID {result['pmid']}** - {result['title']}")
-            st.markdown(f"*{result['authors']} ({result['year']})*")
+            content_badge = "📖 Full Text + Supplements" if result.get('content_type') == 'full_text_with_supplements' else "📄 Abstract Only"
+            pmc_info = f" (PMC{result.get('pmc_id')})" if result.get('pmc_id') else ""
+            
+            st.markdown(f"**PMID {result['pmid']}{pmc_info}** - {result['title']}")
+            st.markdown(f"*{result['authors']} ({result['year']})* | {content_badge}")
             st.markdown(f"Has variant data: {'✅ Yes' if result['has_variant_data'] else '❌ No'} | Confidence: {result['confidence']}")
             if result['has_variant_data'] and result['variants']:
                 for v in result['variants']:
@@ -229,12 +244,12 @@ st.divider()
 st.markdown("""
 ### How it works:
 1. **Search PubMed**: Queries the PubMed database for articles related to your gene/variant
-2. **Retrieve Articles**: Fetches article metadata and abstracts in XML format
-3. **AI Analysis**: Uses a cost-effective LLM to extract:
+2. **Retrieve Full Text**: Automatically fetches full text + supplements from PubMed Central (PMC) when available, otherwise uses abstracts
+3. **AI Analysis**: Uses AI to extract from the complete article text including tables and supplemental data:
    - Genetic variants and genotype information
    - Clinical phenotypes and symptoms
    - Patient demographics and outcomes
 4. **Export Results**: Download structured data as CSV for further analysis
 
-**Note**: This tool analyzes article abstracts. Full-text analysis may yield more complete data but requires additional access.
+**Note**: Full text with supplements is available for open-access articles in PMC. Other articles will be analyzed using abstracts only.
 """)
