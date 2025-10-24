@@ -30,29 +30,54 @@ class PubMedAPI:
             Entrez.email = email
         self.max_results = 20
     
-    def filter_relevant_sections(self, text: str, gene: str, keywords: Optional[List[str]] = None) -> str:
+    def filter_relevant_sections(self, text: str, gene: str, variant: Optional[str] = None, is_table: bool = False) -> str:
         """Extract paragraphs/sections that mention the gene or variant keywords"""
         if not text:
             return ""
         
         search_terms = [gene.lower()]
-        if keywords:
-            search_terms.extend([k.lower() for k in keywords])
+        if variant:
+            normalized_variant = variant.lower().replace(' ', '').replace('-', '')
+            search_terms.append(normalized_variant)
         
         search_terms.extend(['variant', 'mutation', 'polymorphism', 'genotype', 'phenotype', 
                             'clinical', 'patient', 'carrier', 'heterozygous', 'homozygous'])
         
-        paragraphs = re.split(r'\n\n+', text)
-        relevant = []
+        precise_variant_patterns = [
+            r'p\.[A-Z][a-z]{2}\d+[A-Z][a-z]{2}',
+            r'p\.[A-Z][a-z]{2}\d+',
+            r'c\.\d+[ATCG]>[ATCG]',
+            r'c\.\d+',
+            r'g\.\d+',
+            r'rs\d{4,}',
+        ]
         
-        for para in paragraphs:
-            para_lower = para.lower()
-            if any(term in para_lower for term in search_terms):
-                relevant.append(para)
-        
-        return '\n\n'.join(relevant)
+        if is_table:
+            lines = text.split('\n')
+            relevant = []
+            for line in lines:
+                line_lower = line.lower().replace(' ', '').replace('-', '')
+                
+                if any(term in line_lower for term in search_terms):
+                    relevant.append(line)
+                elif any(re.search(pattern, line, re.IGNORECASE) for pattern in precise_variant_patterns):
+                    relevant.append(line)
+            return '\n'.join(relevant) if relevant else text[:5000]
+        else:
+            paragraphs = re.split(r'\n\n+', text)
+            relevant = []
+            
+            for para in paragraphs:
+                para_lower = para.lower().replace(' ', '').replace('-', '')
+                
+                if any(term in para_lower for term in search_terms):
+                    relevant.append(para)
+                elif any(re.search(pattern, para, re.IGNORECASE) for pattern in precise_variant_patterns):
+                    relevant.append(para)
+            
+            return '\n\n'.join(relevant)
     
-    def parse_pdf(self, file_path: str, gene: str) -> str:
+    def parse_pdf(self, file_path: str, gene: str, variant: Optional[str] = None) -> str:
         """Extract text from PDF and filter for relevant content"""
         if not HAS_PDF:
             return ""
@@ -72,11 +97,11 @@ class PubMedAPI:
                             text_parts.append(f"TABLE:\n{table_text}")
                 
                 full_text = '\n\n'.join(text_parts)
-                return self.filter_relevant_sections(full_text, gene)
+                return self.filter_relevant_sections(full_text, gene, variant, is_table=True)
         except Exception as e:
             return f"[PDF parse error: {str(e)}]"
     
-    def parse_excel(self, file_path: str, gene: str) -> str:
+    def parse_excel(self, file_path: str, gene: str, variant: Optional[str] = None) -> str:
         """Extract text from Excel and filter for relevant content"""
         if not HAS_EXCEL:
             return ""
@@ -98,11 +123,11 @@ class PubMedAPI:
                 text_parts.append('\n'.join(rows))
             
             full_text = '\n\n'.join(text_parts)
-            return self.filter_relevant_sections(full_text, gene)
+            return self.filter_relevant_sections(full_text, gene, variant, is_table=True)
         except Exception as e:
             return f"[Excel parse error: {str(e)}]"
     
-    def parse_docx(self, file_path: str, gene: str) -> str:
+    def parse_docx(self, file_path: str, gene: str, variant: Optional[str] = None) -> str:
         """Extract text from Word document and filter for relevant content"""
         if not HAS_DOCX:
             return ""
@@ -123,11 +148,11 @@ class PubMedAPI:
                 text_parts.append(f"TABLE:\n" + '\n'.join(table_text))
             
             full_text = '\n\n'.join(text_parts)
-            return self.filter_relevant_sections(full_text, gene)
+            return self.filter_relevant_sections(full_text, gene, variant, is_table=True)
         except Exception as e:
             return f"[Word parse error: {str(e)}]"
     
-    def download_and_parse_supplement(self, url: str, gene: str) -> Optional[str]:
+    def download_and_parse_supplement(self, url: str, gene: str, variant: Optional[str] = None) -> Optional[str]:
         """Download a supplement file and parse based on file type"""
         try:
             response = requests.get(url, timeout=30)
@@ -142,11 +167,11 @@ class PubMedAPI:
                 file_ext = os.path.splitext(url)[1].lower()
                 
                 if file_ext == '.pdf':
-                    return self.parse_pdf(tmp_path, gene)
+                    return self.parse_pdf(tmp_path, gene, variant)
                 elif file_ext in ['.xlsx', '.xls']:
-                    return self.parse_excel(tmp_path, gene)
+                    return self.parse_excel(tmp_path, gene, variant)
                 elif file_ext in ['.docx', '.doc']:
-                    return self.parse_docx(tmp_path, gene)
+                    return self.parse_docx(tmp_path, gene, variant)
                 else:
                     return None
             finally:
@@ -199,7 +224,7 @@ class PubMedAPI:
         except:
             return None
     
-    def fetch_pmc_fulltext(self, pmc_id: str, gene: str) -> Optional[str]:
+    def fetch_pmc_fulltext(self, pmc_id: str, gene: str, variant: Optional[str] = None) -> Optional[str]:
         """Fetch full text from PMC including supplemental data with intelligent filtering"""
         try:
             fetch_handle = Entrez.efetch(
@@ -229,7 +254,7 @@ class PubMedAPI:
             if body is not None:
                 body_text = " ".join([elem.text or "" for elem in body.iter() if elem.text and elem.tag in ['p', 'title', 'td', 'th']])
                 if body_text.strip():
-                    filtered_body = self.filter_relevant_sections(body_text, gene)
+                    filtered_body = self.filter_relevant_sections(body_text, gene, variant)
                     if filtered_body:
                         full_text_parts.append(f"MAIN TEXT: {filtered_body[:30000]}")
             
@@ -258,7 +283,7 @@ class PubMedAPI:
                             supp_url = f"https://www.ncbi.nlm.nih.gov/pmc/articles/PMC{pmc_id}/bin/{href}"
                             
                             if supp_count < 5:
-                                parsed_content = self.download_and_parse_supplement(supp_url, gene)
+                                parsed_content = self.download_and_parse_supplement(supp_url, gene, variant)
                                 if parsed_content:
                                     full_text_parts.append(f"SUPPLEMENT FILE ({href}): {parsed_content[:10000]}")
                                     supp_count += 1
@@ -271,7 +296,7 @@ class PubMedAPI:
         except Exception as e:
             return None
     
-    def fetch_article_details(self, pmid_list: List[str], gene: str) -> List[Dict]:
+    def fetch_article_details(self, pmid_list: List[str], gene: str, variant: Optional[str] = None) -> List[Dict]:
         if not pmid_list:
             return []
         
@@ -323,7 +348,7 @@ class PubMedAPI:
                     
                     if pmc_id:
                         time.sleep(0.34)
-                        pmc_fulltext = self.fetch_pmc_fulltext(pmc_id, gene)
+                        pmc_fulltext = self.fetch_pmc_fulltext(pmc_id, gene, variant)
                         if pmc_fulltext:
                             full_text = pmc_fulltext
                             content_type = "full_text_with_supplements"
@@ -355,5 +380,5 @@ class PubMedAPI:
         
         time.sleep(0.34)
         
-        articles = self.fetch_article_details(pmid_list, gene)
+        articles = self.fetch_article_details(pmid_list, gene, variant)
         return articles
