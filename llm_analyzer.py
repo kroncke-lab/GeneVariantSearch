@@ -79,7 +79,7 @@ Extract the following information if present:
 6. Clinical outcomes if mentioned
 
 Article text:
-{article_text[:8000]}
+{article_text[:50000]}
 
 Respond ONLY with valid JSON in this exact format:
 {{
