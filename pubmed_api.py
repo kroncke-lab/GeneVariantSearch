@@ -46,6 +46,8 @@ class PubMedAPI:
         precise_variant_patterns = [
             r'p\.[A-Z][a-z]{2}\d+[A-Z][a-z]{2}',
             r'p\.[A-Z][a-z]{2}\d+',
+            r'[A-Z][a-z]{2}\d+[A-Z][a-z]{2}',
+            r'[A-Z]\d+[A-Z]',
             r'c\.\d+[ATCG]>[ATCG]',
             r'c\.\d+',
             r'g\.\d+',
@@ -62,7 +64,12 @@ class PubMedAPI:
                     relevant.append(line)
                 elif any(re.search(pattern, line, re.IGNORECASE) for pattern in precise_variant_patterns):
                     relevant.append(line)
-            return '\n'.join(relevant) if relevant else text[:5000]
+            
+            if relevant:
+                return '\n'.join(relevant)
+            else:
+                lines_to_keep = min(200, len(lines))
+                return '\n'.join(lines[:lines_to_keep])
         else:
             paragraphs = re.split(r'\n\n+', text)
             relevant = []
