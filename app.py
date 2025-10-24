@@ -22,6 +22,8 @@ if 'results' not in st.session_state:
     st.session_state.results = None
 if 'articles_analyzed' not in st.session_state:
     st.session_state.articles_analyzed = 0
+if 'target_phenotypes' not in st.session_state:
+    st.session_state.target_phenotypes = []
 
 with st.sidebar:
     st.header("⚙️ Configuration")
@@ -62,10 +64,16 @@ with st.sidebar:
     max_results = st.slider(
         "Maximum articles to analyze:",
         min_value=5,
-        max_value=50,
-        value=10,
+        max_value=200,
+        value=50,
         step=5,
-        help="More articles = more API calls = higher cost"
+        help="Increase to analyze more articles (may be slower and use more API credits)"
+    )
+
+    phenotype_input = st.text_input(
+        "Target phenotypes (comma separated):",
+        value="sex, QT interval",
+        help="List key phenotypes or clinical features for the AI to prioritize (e.g., sex, QT interval, arrhythmia)"
     )
     
     email = st.text_input(
@@ -128,19 +136,24 @@ if search_button:
                     
                     progress_bar = st.progress(0)
                     status_text = st.empty()
-                    
+
                     analyzer = LLMAnalyzer(model_choice=model_choice)
-                    
+
+                    target_phenotypes = [
+                        p.strip() for p in phenotype_input.split(",") if p.strip()
+                    ] if phenotype_input else []
+
                     results = []
                     for idx, article in enumerate(articles):
                         content_label = "full text" if article.get('content_type') == 'full_text_with_supplements' else "abstract"
                         status_text.text(f"Analyzing article {idx + 1} of {len(articles)} ({content_label})...")
                         progress_bar.progress((idx + 1) / len(articles))
-                        
+
                         analysis = analyzer.extract_variant_data(
                             article['full_text'],
                             gene_input,
-                            variant_input if variant_input else None
+                            variant_input if variant_input else None,
+                            target_phenotypes=target_phenotypes
                         )
                         
                         result = {
@@ -158,6 +171,7 @@ if search_button:
                         results.append(result)
                     
                     st.session_state.results = results
+                    st.session_state.target_phenotypes = target_phenotypes
                     st.session_state.articles_analyzed = len(articles)
                     
                     progress_bar.empty()
@@ -170,9 +184,15 @@ if search_button:
 if st.session_state.results:
     st.divider()
     st.header("📊 Results")
-    
+
     results = st.session_state.results
-    
+    target_phenotypes = st.session_state.get('target_phenotypes', [])
+
+    if target_phenotypes:
+        st.caption(
+            "Focused phenotypes: " + ", ".join(target_phenotypes)
+        )
+
     articles_with_data = sum(1 for r in results if r['has_variant_data'])
     
     col1, col2, col3 = st.columns(3)
