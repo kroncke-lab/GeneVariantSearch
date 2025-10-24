@@ -53,11 +53,22 @@ class LLMAnalyzer:
         else:
             raise Exception(f"Unsupported model choice: {model_choice}")
     
-    def extract_variant_data(self, article_text: str, gene: str, variant: Optional[str] = None) -> Dict:
+    def extract_variant_data(
+        self,
+        article_text: str,
+        gene: str,
+        variant: Optional[str] = None,
+        target_phenotypes: Optional[List[str]] = None
+    ) -> Dict:
+        phenotype_focus = "None specified"
+        if target_phenotypes:
+            phenotype_focus = ", ".join(target_phenotypes)
         prompt = f"""Analyze the following research article and extract genetic variant and clinical data.
 
 Gene of interest: {gene}
 {f'Variant of interest: {variant}' if variant else ''}
+
+Prioritize extracting or confirming the following phenotypes when available: {phenotype_focus}.
 
 Extract the following information if present:
 1. Genetic variants mentioned (gene name and specific variant notation like p.Tyr54Asn)
@@ -122,9 +133,10 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
                 )
                 response_text = response.text
             
-            result = json.loads(response_text)
+            cleaned_response = self._clean_json_response(response_text)
+            result = json.loads(cleaned_response)
             return result
-            
+
         except json.JSONDecodeError as e:
             return {
                 "has_variant_data": False,
@@ -139,13 +151,24 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
                 "confidence": "low",
                 "error": str(e)
             }
-    
-    def batch_analyze_articles(self, articles: List[Dict], gene: str, variant: Optional[str] = None) -> List[Dict]:
+
+    def batch_analyze_articles(
+        self,
+        articles: List[Dict],
+        gene: str,
+        variant: Optional[str] = None,
+        target_phenotypes: Optional[List[str]] = None
+    ) -> List[Dict]:
         results = []
-        
+
         for article in articles:
-            analysis = self.extract_variant_data(article['full_text'], gene, variant)
-            
+            analysis = self.extract_variant_data(
+                article['full_text'],
+                gene,
+                variant,
+                target_phenotypes=target_phenotypes
+            )
+
             result = {
                 "pmid": article['pmid'],
                 "title": article['title'],
@@ -156,7 +179,32 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
                 "confidence": analysis.get('confidence', 'low'),
                 "error": analysis.get('error', None)
             }
-            
+
             results.append(result)
-        
+
         return results
+
+    @staticmethod
+    def _clean_json_response(response_text: str) -> str:
+        """Attempt to extract valid JSON from an LLM response."""
+        text = response_text.strip()
+
+        if text.startswith("```"):
+            parts = [segment.strip() for segment in text.split("```") if segment.strip()]
+            for segment in parts:
+                if "{" in segment:
+                    text = segment
+                    break
+            else:
+                text = parts[-1] if parts else text
+
+            # remove language hints like ```json
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
+
+        first_brace = text.find("{")
+        last_brace = text.rfind("}")
+        if first_brace != -1 and last_brace != -1:
+            text = text[first_brace:last_brace + 1]
+
+        return text
