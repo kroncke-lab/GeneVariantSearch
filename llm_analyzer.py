@@ -15,6 +15,12 @@ try:
 except ImportError:
     HAS_OPENAI = False
 
+try:
+    from google import genai
+    HAS_GEMINI = True
+except ImportError:
+    HAS_GEMINI = False
+
 class LLMAnalyzer:
     def __init__(self, model_choice: str = "anthropic"):
         self.model_choice = model_choice
@@ -35,6 +41,14 @@ class LLMAnalyzer:
                 raise Exception("OPENAI_API_KEY not set")
             self.client = OpenAI(api_key=openai_key)
             self.model = "gpt-3.5-turbo"
+        elif model_choice == "gemini":
+            if not HAS_GEMINI:
+                raise Exception("Google Gemini library not available")
+            gemini_key = os.environ.get('GEMINI_API_KEY')
+            if not gemini_key:
+                raise Exception("GEMINI_API_KEY not set")
+            self.client = genai.Client(api_key=gemini_key)
+            self.model = "gemini-2.5-flash"
         else:
             raise Exception(f"Unsupported model choice: {model_choice}")
     
@@ -86,7 +100,7 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
                     ]
                 )
                 response_text = message.content[0].text
-            else:
+            elif self.model_choice == "openai":
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
@@ -97,6 +111,12 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
                     max_tokens=2048
                 )
                 response_text = response.choices[0].message.content
+            else:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt
+                )
+                response_text = response.text
             
             result = json.loads(response_text)
             return result

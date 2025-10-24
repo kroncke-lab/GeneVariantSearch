@@ -29,12 +29,19 @@ with st.sidebar:
     st.subheader("LLM Model Selection")
     model_choice = st.radio(
         "Choose AI Model:",
-        ["anthropic", "openai"],
-        help="Anthropic uses Claude 3 Haiku (cheapest), OpenAI uses GPT-3.5 Turbo"
+        ["gemini", "anthropic", "openai"],
+        help="Gemini 2.5 Flash (Google - FREE tier), Claude 3 Haiku (Anthropic), or GPT-3.5 (OpenAI)"
     )
     
     api_key_available = False
-    if model_choice == "anthropic":
+    if model_choice == "gemini":
+        if os.environ.get('GEMINI_API_KEY'):
+            st.success("✓ Gemini API key detected")
+            api_key_available = True
+        else:
+            st.warning("⚠️ GEMINI_API_KEY not set")
+            st.info("Get a free API key from https://aistudio.google.com/apikey")
+    elif model_choice == "anthropic":
         if os.environ.get('ANTHROPIC_API_KEY'):
             st.success("✓ Anthropic API key detected")
             api_key_available = True

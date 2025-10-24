@@ -11,6 +11,10 @@ Extract structured genetic and clinical data from scientific literature, specifi
 - Optional attributes (age, sex, treatment, outcomes)
 
 ## Recent Changes
+- **2025-10-24**: Added Gemini AI support
+  - Added Google Gemini 2.5 Flash as AI model option (free tier available)
+  - Updated UI to show Gemini as default/first choice
+  - Users can now choose between Gemini, Claude, or GPT models
 - **2025-10-23**: Initial implementation
   - PubMed API integration using Biopython
   - LLM-powered variant extraction (Claude 3 Haiku or GPT-3.5 Turbo)
@@ -31,7 +35,8 @@ Extract structured genetic and clinical data from scientific literature, specifi
    - Parses titles, abstracts, authors, publication year
 
 2. **llm_analyzer.py**: AI-powered data extraction
-   - Supports Anthropic Claude 3 Haiku (cheapest option)
+   - Supports Google Gemini 2.5 Flash (free tier available)
+   - Supports Anthropic Claude 3 Haiku
    - Supports OpenAI GPT-3.5 Turbo
    - Extracts variants, genotypes, phenotypes, clinical data
    - Returns structured JSON responses
@@ -46,26 +51,29 @@ Extract structured genetic and clinical data from scientific literature, specifi
 ### Dependencies
 - streamlit: Web interface
 - biopython: PubMed API access
+- google-genai: Gemini AI integration
 - anthropic: Claude AI integration
 - openai: GPT integration
 - pandas: Data structuring and export
 
 ### API Keys Required
-- `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (user choice)
+- `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENAI_API_KEY` (user choice)
 - PubMed requires email but no API key
+- Gemini offers a free tier at https://aistudio.google.com/apikey
 
 ### Workflow
 - Command: `streamlit run app.py --server.port 5000`
 - Port: 5000 (webview)
 
 ## How to Use
-1. Select AI model (Anthropic or OpenAI)
-2. Enter gene name (required)
-3. Enter specific variant (optional - leave empty to find all variants)
-4. Set maximum articles to analyze
-5. Click "Search PubMed & Analyze"
-6. Review extracted data in table
-7. Download results as CSV
+1. Select AI model (Gemini, Anthropic, or OpenAI)
+2. Add your API key in Secrets (Tools → Secrets)
+3. Enter gene name (required)
+4. Enter specific variant (optional - leave empty to find all variants)
+5. Set maximum articles to analyze
+6. Click "Search PubMed & Analyze"
+7. Review extracted data in table
+8. Download results as CSV
 
 ## Example Searches
 - Gene: `KCNH2`, Variant: `p.Tyr54Asn` → Find specific variant
