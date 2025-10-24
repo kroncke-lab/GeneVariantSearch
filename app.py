@@ -4,6 +4,21 @@ from pubmed_api import PubMedAPI
 from llm_analyzer import LLMAnalyzer
 import os
 from datetime import datetime
+import sys
+
+# Check if running through streamlit CLI
+try:
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+    if get_script_run_ctx() is None:
+        print("\n" + "="*70)
+        print("⚠️  This is a Streamlit application.")
+        print("="*70)
+        print("\nPlease run it with the Streamlit CLI:")
+        print(f"\n  streamlit run {os.path.abspath(__file__)}\n")
+        print("="*70 + "\n")
+        sys.exit(0)
+except ImportError:
+    pass
 
 st.set_page_config(
     page_title="PubMed Genetic Variant Extractor",
