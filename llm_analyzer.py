@@ -52,7 +52,7 @@ class LLMAnalyzer:
         else:
             raise Exception(f"Unsupported model choice: {model_choice}")
     
-    def extract_variant_data(self, article_text: str, gene: str, variant: str = None) -> Dict:
+    def extract_variant_data(self, article_text: str, gene: str, variant: Optional[str] = None) -> Dict:
         prompt = f"""Analyze the following research article and extract genetic variant and clinical data.
 
 Gene of interest: {gene}
@@ -136,7 +136,7 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
                 "error": str(e)
             }
     
-    def batch_analyze_articles(self, articles: List[Dict], gene: str, variant: str = None) -> List[Dict]:
+    def batch_analyze_articles(self, articles: List[Dict], gene: str, variant: Optional[str] = None) -> List[Dict]:
         results = []
         
         for article in articles:

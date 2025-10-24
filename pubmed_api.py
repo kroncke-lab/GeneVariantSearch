@@ -12,7 +12,7 @@ class PubMedAPI:
             Entrez.email = email
         self.max_results = 20
     
-    def search_publications(self, gene: str, variant: str = None, max_results: int = 20) -> List[str]:
+    def search_publications(self, gene: str, variant: Optional[str] = None, max_results: int = 20) -> List[str]:
         query = gene
         if variant:
             query = f"{gene} AND {variant}"
@@ -97,7 +97,7 @@ class PubMedAPI:
         except Exception as e:
             raise Exception(f"Failed to fetch article details: {str(e)}")
     
-    def search_and_fetch(self, gene: str, variant: str = None, max_results: int = 20) -> List[Dict]:
+    def search_and_fetch(self, gene: str, variant: Optional[str] = None, max_results: int = 20) -> List[Dict]:
         pmid_list = self.search_publications(gene, variant, max_results)
         
         if not pmid_list:
