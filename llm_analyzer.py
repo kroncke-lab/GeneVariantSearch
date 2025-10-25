@@ -63,19 +63,37 @@ class LLMAnalyzer:
         phenotype_focus = "None specified"
         if target_phenotypes:
             phenotype_focus = ", ".join(target_phenotypes)
-        prompt = f"""Analyze the following research article and extract genetic variant and clinical data.
+        prompt = f"""Analyze the following research article and extract genetic variant and clinical data at TWO levels:
 
 Gene of interest: {gene}
 {f'Variant of interest: {variant}' if variant else ''}
 
 Prioritize extracting or confirming the following phenotypes when available: {phenotype_focus}.
 
-Extract the following information for each individual, if present:
-1. Genetic variant carried by patient/individual (gene name and specific variant, like p.Tyr54Asn or Y54N)
-2. were they heterozygous, homozygous, compound heterozygous?
-3. do they have any diagnoses of the phenotypes mentioned?
-5. Treatment information if mentioned
-6. Clinical outcomes if mentioned
+**LEVEL 1: INDIVIDUAL PATIENT DATA** (case reports, patient narratives)
+For each individual patient/participant mentioned, extract:
+1. Genetic variant (gene name and specific variant, like p.Tyr54Asn or Y54N)
+2. Genotype (heterozygous, homozygous, compound heterozygous)
+3. Phenotypes/diagnoses
+4. Age, sex, ethnicity/ancestry (if mentioned)
+5. Treatment and clinical outcomes (if mentioned)
+
+**LEVEL 2: AGGREGATE STUDY DATA** (cohort studies, population genetics, meta-analyses)
+Extract study-level statistics from tables and supplemental materials:
+1. Study design (case-control, cohort, GWAS, meta-analysis, family study, etc.)
+2. Sample sizes (number of cases with variant, number of controls, total cohort size)
+3. Ethnicity/ancestry breakdown (e.g., "500 European, 200 East Asian, 100 African")
+4. Study location/geography (country, institution, population source)
+5. Cohort name if mentioned (e.g., "UK Biobank", "CHARGE Consortium", "Framingham Heart Study")
+6. Variant frequency in cases vs controls (if provided)
+7. For tables: extract ALL variants in the gene of interest with their case/control counts
+
+**DEDUPLICATION METADATA**
+Extract information to help identify potential participant overlap:
+- Cohort/study names
+- Recruitment dates/periods
+- Geographic location + institution
+- Author names/institutions (for tracking follow-up studies)
 
 Article text:
 {article_text[:50000]}
@@ -83,7 +101,14 @@ Article text:
 Respond ONLY with valid JSON in this exact format:
 {{
   "has_variant_data": true/false,
-  "variants": [
+  "study_metadata": {{
+    "study_type": "case-control/cohort/GWAS/meta-analysis/case-report/family-study/unknown",
+    "location": "country, city, or institution if mentioned, else null",
+    "cohort_name": "official cohort/study name if mentioned, else null",
+    "recruitment_period": "dates if mentioned, else null",
+    "primary_institution": "lead institution/affiliation if mentioned, else null"
+  }},
+  "individual_patients": [
     {{
       "gene": "gene name",
       "variant": "variant notation",
@@ -91,14 +116,30 @@ Respond ONLY with valid JSON in this exact format:
       "phenotypes": ["phenotype1", "phenotype2"],
       "age": "age if mentioned or null",
       "sex": "sex if mentioned or null",
+      "ethnicity": "ethnicity/ancestry if mentioned or null",
       "treatment": "treatment if mentioned or null",
       "outcome": "outcome if mentioned or null"
+    }}
+  ],
+  "aggregate_data": [
+    {{
+      "gene": "gene name",
+      "variant": "variant notation",
+      "cases_with_variant": "number or null",
+      "total_cases": "number or null",
+      "controls_with_variant": "number or null",
+      "total_controls": "number or null",
+      "ethnicity_breakdown": "description of population ancestry, e.g. '500 EUR, 200 EAS' or null",
+      "allele_frequency_cases": "frequency if mentioned or null",
+      "allele_frequency_controls": "frequency if mentioned or null",
+      "phenotype": "associated phenotype/condition",
+      "notes": "any relevant context from table or text"
     }}
   ],
   "confidence": "high/medium/low"
 }}
 
-If no variant data is found, return: {{"has_variant_data": false, "variants": [], "confidence": "low"}}
+If no variant data is found, return: {{"has_variant_data": false, "study_metadata": {{}}, "individual_patients": [], "aggregate_data": [], "confidence": "low"}}
 """
 
         try:
@@ -138,14 +179,18 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
         except json.JSONDecodeError as e:
             return {
                 "has_variant_data": False,
-                "variants": [],
+                "study_metadata": {},
+                "individual_patients": [],
+                "aggregate_data": [],
                 "confidence": "low",
                 "error": f"JSON parsing error: {str(e)}"
             }
         except Exception as e:
             return {
                 "has_variant_data": False,
-                "variants": [],
+                "study_metadata": {},
+                "individual_patients": [],
+                "aggregate_data": [],
                 "confidence": "low",
                 "error": str(e)
             }
@@ -173,7 +218,9 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
                 "year": article['year'],
                 "authors": article['authors'],
                 "has_variant_data": analysis.get('has_variant_data', False),
-                "variants": analysis.get('variants', []),
+                "study_metadata": analysis.get('study_metadata', {}),
+                "individual_patients": analysis.get('individual_patients', []),
+                "aggregate_data": analysis.get('aggregate_data', []),
                 "confidence": analysis.get('confidence', 'low'),
                 "error": analysis.get('error', None)
             }
