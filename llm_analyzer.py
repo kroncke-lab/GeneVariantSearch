@@ -16,8 +16,8 @@ except ImportError:
     HAS_OPENAI = False
 
 try:
-    from google import genai
-    from google.genai import types
+    import google.generativeai as genai
+    from google.generativeai.types import GenerationConfig
     HAS_GEMINI = True
 except ImportError:
     HAS_GEMINI = False
@@ -48,8 +48,8 @@ class LLMAnalyzer:
             gemini_key = os.environ.get('GEMINI_API_KEY')
             if not gemini_key:
                 raise Exception("GEMINI_API_KEY not set")
-            self.client = genai.Client(api_key=gemini_key)
-            self.model = "gemini-2.5-flash"
+            genai.configure(api_key=gemini_key)
+            self.model = genai.GenerativeModel("gemini-1.5-flash")
         else:
             raise Exception(f"Unsupported model choice: {model_choice}")
     
@@ -70,11 +70,10 @@ Gene of interest: {gene}
 
 Prioritize extracting or confirming the following phenotypes when available: {phenotype_focus}.
 
-Extract the following information if present:
-1. Genetic variants mentioned (gene name and specific variant notation like p.Tyr54Asn)
-2. Carrier genotypes (heterozygous, homozygous, compound heterozygous)
-3. Clinical phenotypes (symptoms, conditions, measurements like QT prolongation, arrhythmia, syncope)
-4. Patient demographics (age, sex) if mentioned
+Extract the following information for each individual, if present:
+1. Genetic variant carried by patient/individual (gene name and specific variant, like p.Tyr54Asn or Y54N)
+2. were they heterozygous, homozygous, compound heterozygous?
+3. do they have any diagnoses of the phenotypes mentioned?
 5. Treatment information if mentioned
 6. Clinical outcomes if mentioned
 
@@ -124,10 +123,9 @@ If no variant data is found, return: {{"has_variant_data": false, "variants": []
                 )
                 response_text = response.choices[0].message.content
             else:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
-                    config=types.GenerateContentConfig(
+                response = self.model.generate_content(
+                    prompt,
+                    generation_config=GenerationConfig(
                         response_mime_type="application/json"
                     )
                 )
