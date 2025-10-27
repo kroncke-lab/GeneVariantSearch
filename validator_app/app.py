@@ -28,7 +28,7 @@ with st.sidebar:
     
     model_choice = st.selectbox(
         "Select AI Model",
-        ["Google Gemini 2.5 Flash (Free)", "Anthropic Claude 3 Haiku", "OpenAI GPT-3.5 Turbo"],
+        ["Google Gemini 2.5 Flash (Free)", "Anthropic Claude 3 Haiku", "OpenAI GPT-4o Mini"],
         help="Gemini offers free tier at https://aistudio.google.com/apikey"
     )
     
@@ -71,7 +71,7 @@ if uploaded_file:
         st.subheader("🔍 Column Mapping")
         st.markdown("Help us identify the key columns in your CSV:")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             pmid_col = st.selectbox(
@@ -81,13 +81,22 @@ if uploaded_file:
             )
         
         with col2:
+            gene_col = st.selectbox(
+                "Gene Column (optional)",
+                options=["None"] + df.columns.tolist(),
+                index=next((i+1 for i, col in enumerate(df.columns) if 'gene' in col.lower()), 0)
+            )
+        
+        col3, col4 = st.columns(2)
+        
+        with col3:
             variant_cols = st.multiselect(
                 "Variant Column(s)",
                 options=df.columns.tolist(),
                 default=[col for col in df.columns if any(keyword in col.lower() for keyword in ['variant', 'hgvs', 'protein', 'mutation'])]
             )
         
-        with col3:
+        with col4:
             phenotype_cols = st.multiselect(
                 "Phenotype/Diagnosis Column(s)",
                 options=df.columns.tolist(),
@@ -113,14 +122,15 @@ if uploaded_file:
                 df_subset = df.head(max_rows)
                 
                 for idx, row in df_subset.iterrows():
-                    progress = (idx + 1) / max_rows
+                    row_num = int(idx) + 1
+                    progress = row_num / max_rows
                     progress_bar.progress(progress)
                     
                     pmid = str(row[pmid_col]).strip()
                     if not pmid or pmid.lower() == 'nan':
-                        status_text.text(f"Row {idx+1}/{max_rows}: Skipping (no PMID)")
+                        status_text.text(f"Row {row_num}/{max_rows}: Skipping (no PMID)")
                         results.append({
-                            'row_index': idx,
+                            'row_index': int(idx),
                             'pmid': pmid,
                             'validation_status': 'SKIPPED',
                             'validation_reason': 'No PMID provided',
@@ -129,18 +139,20 @@ if uploaded_file:
                         })
                         continue
                     
-                    variant_info = " | ".join([f"{col}: {row[col]}" for col in variant_cols if pd.notna(row[col])])
-                    phenotype_info = " | ".join([f"{col}: {row[col]}" for col in phenotype_cols if pd.notna(row[col])])
+                    gene_info = str(row[gene_col]) if gene_col != "None" and gene_col in df.columns and pd.notna(row[gene_col]) else ""
+                    variant_info = " | ".join([str(row[col]) for col in variant_cols if pd.notna(row[col])])
+                    phenotype_info = " | ".join([str(row[col]) for col in phenotype_cols if pd.notna(row[col])])
                     
-                    status_text.text(f"Row {idx+1}/{max_rows}: Validating PMID {pmid}...")
+                    status_text.text(f"Row {row_num}/{max_rows}: Validating PMID {pmid}...")
                     
                     result = validator.validate_variant(
                         pmid=pmid,
+                        gene=gene_info,
                         annotated_variant=variant_info,
                         annotated_phenotype=phenotype_info
                     )
                     
-                    result['row_index'] = idx
+                    result['row_index'] = int(idx)
                     results.append(result)
                 
                 progress_bar.progress(1.0)

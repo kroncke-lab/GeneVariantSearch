@@ -1,7 +1,13 @@
-# PubMed Genetic Variant & Clinical Data Extractor
+# PubMed Genetic Variant Tools Suite
 
 ## Overview
-A Streamlit web application that searches PubMed publications for genetic variants and extracts clinical data using AI-powered text analysis. The tool helps researchers quickly identify published genetic variants, their carrier genotypes, associated phenotypes, and clinical outcomes.
+Two Streamlit web applications for genetic variant research:
+
+### 1. Variant Extractor (main app)
+Searches PubMed publications for genetic variants and extracts clinical data using AI-powered text analysis. Helps researchers quickly identify published genetic variants, their carrier genotypes, associated phenotypes, and clinical outcomes.
+
+### 2. Variant Validator (validator_app)
+Validates genetic variant annotations from CSV files against source PubMed publications. Compares annotated data vs. what's actually reported in papers and returns CORRECT/INCORRECT/UNSURE assessments with explanations.
 
 ## Purpose
 Extract structured genetic and clinical data from scientific literature, specifically:
@@ -10,7 +16,40 @@ Extract structured genetic and clinical data from scientific literature, specifi
 - Phenotypic data (QT prolongation, arrhythmia, syncope)
 - Optional attributes (age, sex, treatment, outcomes)
 
+## Apps
+
+### Variant Extractor (`app.py`)
+**Purpose:** Discover and extract variant data from PubMed literature
+**Features:**
+- Search by gene name and optional specific variant
+- Extracts from abstracts, full-text, and supplements (PDF/Excel/Word)
+- Smart filtering to find variant-relevant sections
+- Supports shorthand notations (Y54N, Tyr54Asn, p.Tyr54Asn, etc.)
+- CSV export of extracted data
+
+**Run:** `streamlit run app.py --server.port 5000`
+
+### Variant Validator (`validator_app/app.py`)
+**Purpose:** Quality control - validate annotations against source papers
+**Features:**
+- Upload CSV with PMID, Gene, Variant, Phenotype columns
+- Auto-detects columns with smart defaults
+- Fetches source papers (abstracts + full text when available)
+- AI compares annotated vs. reported data
+- Returns CORRECT/INCORRECT/UNSURE with explanations
+- CSV export with validation results
+
+**Run:** `streamlit run validator_app/app.py --server.port 5000`
+
+**Tip:** For best results, include a Gene column in your CSV for better full-text retrieval.
+
 ## Recent Changes
+- **2025-10-27**: Added Variant Validator app
+  - New app in `validator_app/` for validating CSV annotations
+  - Supports optional gene column for improved full-text retrieval
+  - Uses GPT-4o Mini (instead of GPT-3.5) for JSON output support
+  - Auto-detects PMID/Gene/Variant/Phenotype columns
+  - Returns validation status with detailed explanations
 - **2025-10-24**: Added Gemini AI support
   - Added Google Gemini 2.5 Flash as AI model option (free tier available)
   - Updated UI to show Gemini as default/first choice

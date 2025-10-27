@@ -1,0 +1,9 @@
+[server]
+enableXsrfProtection = false
+enableCORS = false
+port = 5000
+headless = true
+
+[browser]
+gatherUsageStats = false
+serverAddress = "0.0.0.0"

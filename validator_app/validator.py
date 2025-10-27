@@ -3,17 +3,86 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pubmed_api import PubMedAPI
-from llm_analyzer import LLMAnalyzer
 import json
+
+try:
+    from anthropic import Anthropic
+    HAS_ANTHROPIC = True
+except ImportError:
+    HAS_ANTHROPIC = False
+
+try:
+    from openai import OpenAI
+    HAS_OPENAI = True
+except ImportError:
+    HAS_OPENAI = False
+
+try:
+    from google import genai
+    from google.genai import types
+    HAS_GEMINI = True
+except ImportError:
+    HAS_GEMINI = False
 
 class VariantValidator:
     def __init__(self, api_key: str, model_choice: str):
         self.api_key = api_key
         self.model_choice = model_choice
         self.pubmed = PubMedAPI()
-        self.analyzer = LLMAnalyzer(api_key, model_choice)
+        
+        if "Gemini" in model_choice:
+            if not HAS_GEMINI:
+                raise Exception("Google Gemini library not available")
+            self.client = genai.Client(api_key=api_key)
+            self.model = "gemini-2.5-flash"
+            self.llm_type = "gemini"
+        elif "Claude" in model_choice:
+            if not HAS_ANTHROPIC:
+                raise Exception("Anthropic library not available")
+            self.client = Anthropic(api_key=api_key)
+            self.model = "claude-3-haiku-20240307"
+            self.llm_type = "anthropic"
+        else:
+            if not HAS_OPENAI:
+                raise Exception("OpenAI library not available")
+            self.client = OpenAI(api_key=api_key)
+            self.model = "gpt-4o-mini"
+            self.llm_type = "openai"
     
-    def validate_variant(self, pmid: str, annotated_variant: str, annotated_phenotype: str) -> dict:
+    def call_llm(self, prompt: str) -> str:
+        """Call the selected LLM with a prompt"""
+        try:
+            if self.llm_type == "anthropic":
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return message.content[0].text
+            elif self.llm_type == "openai":
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a biomedical research assistant. Always respond with valid JSON only."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    max_tokens=2048
+                )
+                return response.choices[0].message.content
+            else:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json"
+                    )
+                )
+                return response.text
+        except Exception as e:
+            raise Exception(f"LLM call failed: {str(e)}")
+    
+    def validate_variant(self, pmid: str, annotated_variant: str, annotated_phenotype: str, gene: str = "") -> dict:
         """
         Validate a variant annotation against the source paper
         
@@ -21,7 +90,21 @@ class VariantValidator:
             dict with keys: validation_status, validation_reason, paper_title, reported_data
         """
         try:
-            articles = self.pubmed.search_pubmed(query=f"{pmid}[PMID]", max_results=1)
+            pmid_list = [pmid]
+            
+            import re
+            gene_from_variant = gene if gene else "ValidationQuery"
+            
+            if not gene and annotated_variant:
+                variant_parts = annotated_variant.split('|')
+                for part in variant_parts:
+                    part = part.strip()
+                    gene_match = re.match(r'^([A-Z][A-Z0-9]{2,})\b', part)
+                    if gene_match:
+                        gene_from_variant = gene_match.group(1)
+                        break
+            
+            articles = self.pubmed.fetch_article_details(pmid_list, gene=gene_from_variant, variant=None)
             
             if not articles:
                 return {
@@ -37,13 +120,9 @@ class VariantValidator:
             
             text_content = f"Title: {paper_title}\n\nAbstract: {article.get('abstract', '')}"
             
-            pmc_id = article.get('pmc_id')
-            if pmc_id:
-                fulltext_data = self.pubmed.fetch_pmc_fulltext(pmc_id, gene=annotated_variant.split(':')[0] if ':' in annotated_variant else '')
-                if fulltext_data.get('full_text'):
-                    text_content += f"\n\nFull Text:\n{fulltext_data['full_text'][:20000]}"
-                if fulltext_data.get('supplements'):
-                    text_content += f"\n\nSupplemental Data:\n{fulltext_data['supplements'][:30000]}"
+            full_text = article.get('full_text', '')
+            if full_text:
+                text_content += f"\n\nFull Text:\n{full_text[:20000]}"
             
             validation_prompt = f"""You are validating genetic variant annotations against the source publication.
 
@@ -78,7 +157,7 @@ Compare the annotated information against what is actually reported in the paper
 - Consider that abbreviations and full terms may be used interchangeably
 """
 
-            response = self.analyzer._call_llm(validation_prompt)
+            response = self.call_llm(validation_prompt)
             
             try:
                 result_data = json.loads(response)
